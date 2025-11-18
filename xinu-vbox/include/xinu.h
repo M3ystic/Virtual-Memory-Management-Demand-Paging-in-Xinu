@@ -41,3 +41,6 @@
 #include <multiboot.h>
 #include <stdio.h>
 #include <string.h>
+//new
+#include <paging.h>
+#include <paging_helper.h>

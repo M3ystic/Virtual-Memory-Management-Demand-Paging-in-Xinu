@@ -26,3 +26,14 @@ In short, the system extends Xinu with:
 - Per-process memory isolation
 
 This creates a working virtual memory subsystem capable of running user processes with independently managed heaps while maintaining stability, safety, and correct memory mapping behavior.
+
+//changed
+xinu.h
+paging.h
+paging_help.h
+meminit.c
+i386.c
+control_reg.c
+pagefault_handler_disp.S
+initalize.c
+prototypes.h

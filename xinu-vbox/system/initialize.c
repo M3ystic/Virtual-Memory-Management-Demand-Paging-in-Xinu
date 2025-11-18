@@ -25,6 +25,7 @@ struct	memblk	memlist;	/* List of free memory blocks		*/
 
 int	prcount;		/* Total number of live processes	*/
 pid32	currpid;		/* ID of currently executing process	*/
+extern uint32 first_page_directory;
 
 /* Control sequence to reset the console colors and cusor positiion	*/
 
@@ -222,6 +223,15 @@ static	void	sysinit()
 	for (i = 0; i < NDEVS; i++) {
 		init(i);
 	}
+
+
+
+	////
+	page_table_init();
+	write_cr3(first_page_directory);
+	dump_pd();
+	enable_paging();
+
 	return;
 }
 
