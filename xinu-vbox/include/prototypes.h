@@ -1,3 +1,15 @@
+/* in file helper_functions.c*/
+extern uint32* get_next_free_pt_frame(void);
+extern void page_table_init(void);
+extern void dump_pd(void);
+extern void dump_pt(void);
+extern uint32 free_ffs_pages(void);
+extern uint32 allocated_virtual_pages(pid32);
+extern uint32 used_ffs_frames(pid32);
+
+extern void pagefault_handler(void);
+
+
 /* in file 82545EMInit.c */
 extern	status	_82545EMInit(struct ethcblk *);
 extern	status	_82545EM_read_phy_reg(struct ethcblk *, uint32, uint16 *);

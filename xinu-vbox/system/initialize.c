@@ -222,6 +222,15 @@ static	void	sysinit()
 	for (i = 0; i < NDEVS; i++) {
 		init(i);
 	}
+
+
+	////
+	page_table_init();
+	write_cr3(first_page_directory);
+	dump_pd();
+	dump_pt();
+	enable_paging();
+
 	return;
 }
 
