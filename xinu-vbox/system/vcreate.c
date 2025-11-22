@@ -62,6 +62,9 @@ pid32	vcreate(
 	//dump_pd();
 	//dump_pt();
 
+	// allocate and initialize new PD table for this process
+    alloc_new_pd();
+
 
 	/* Initialize stack as if the process was called		*/
 

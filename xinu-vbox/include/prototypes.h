@@ -6,6 +6,7 @@ extern void dump_pt(void);
 extern uint32 free_ffs_pages(void);
 extern uint32 allocated_virtual_pages(pid32);
 extern uint32 used_ffs_frames(pid32);
+extern void alloc_new_pd(void);
 
 extern void pagefault_handler(void);
 
