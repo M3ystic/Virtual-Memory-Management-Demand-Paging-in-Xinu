@@ -1,8 +1,9 @@
 #include <xinu.h>
+#include <stdarg.h>
 
 
 uint32 next_free_pt_frame = PAGE_TABLE_AREA_START_ADDRESS;
-uint32 first_page_directory;
+uint32 kernels_directory;
 bool8 page_in_use[XINU_PAGES];      // this table is used to track phys page availability
 
 /*
@@ -12,7 +13,8 @@ uint32* get_next_free_pt_frame()
     next_free_pt_frame = next_free_pt_frame + PAGE_SIZE;
     return addr;
 }*/
-
+////////////////////////////////////////
+//////////////////////////////////////
 uint32* get_next_free_pt_frame()
 {
     // look for available page
@@ -25,7 +27,8 @@ uint32* get_next_free_pt_frame()
     }
     return NULL;
 }
-
+/////////////////////////////////
+/////////////////////////////////
 void page_table_init()
 {
     //get first address for the page directory that a user process will start from
@@ -33,7 +36,7 @@ void page_table_init()
 
     memset(pdbr, 0, PAGE_SIZE);
 
-    first_page_directory =  (uint32)pdbr;
+    kernels_directory =  (uint32)pdbr;
 
     uint8 pd_index;
     for (pd_index = 0; pd_index < XINU_PAGE_DIRECTORY_LENGTH; pd_index++){
@@ -58,33 +61,105 @@ void page_table_init()
         }
     }
 }
-
+/////////////////////////////////
+/////////////////////////////////
 // allocate new page directory table
-void alloc_new_pd()
+pd_t* alloc_new_pd()
 {
     // get and initialize new PD table for this process
-    pd_t* pdbr =  (pd_t* )get_next_free_pt_frame();
-    if (pdbr == NULL) {
+    pd_t* new_pdbr =  (pd_t* )get_next_free_pt_frame();
+    if (new_pdbr == NULL) {
         kprintf("no free frames for page directory\n");
     }
-    memset(pdbr, 0, PAGE_SIZE);
+    memset(new_pdbr, 0, PAGE_SIZE);
 
-    // only 8 PD entries is used, the rest will be marked as not present
+    pd_t* kernels_directory_casted = (pd_t*)(kernels_directory);   //cast  it into pd type
+
+    // just need to copy kernel entries into users adress space
     uint8 pd_index;
     for (pd_index = 0; pd_index < XINU_PAGE_DIRECTORY_LENGTH; pd_index++) {
-        pt_t* page_table = (pt_t*)get_next_free_pt_frame();
-        if (page_table == NULL) {
-            kprintf("no free frames for page table at PDE[%d]\n", pd_index);
-        }
-        pdbr[pd_index].pd_pres = 1;
-        pdbr[pd_index].pd_write = 1;
-        pdbr[pd_index].pd_user = 1;
-        pdbr[pd_index].pd_base = ((uint32)page_table) >> 12;
+        new_pdbr[pd_index]= kernels_directory_casted[pd_index];    // now this new page diectory has xinus
     }
+
+    return new_pdbr;
 }
+///////////////////////////////////
+///////////////////////////////////
+void init_heap(struct procent* proc)
+{
+
+     struct memblock* startofheap = (struct memblock*)proc->heapstart;
+     startofheap->nextblock = NULL;
+     startofheap->blocklength = (uint32)(proc->heapend - proc->heapstart);  //should be 128MB
+
+     proc->heapmlist = startofheap;
+}
+/////////////
+/////////////
+
+// pid32 create_help (void *funcaddr, uint32 ssize, pri16 priority, char *name,
+// uint32 nargs, va_list arguments)
+// {
+//     uint32 n[nargs];
+//     int i; for (i = 0; i < nargs; i++) n[i] = va_arg(arguments, uint32);
+
+//     pid32 returnpid = create()
+
+// }      i dont know how to get by the variable arguments
+
+pid32 vcreate (void *funcaddr, uint32 ssize, pri16 priority, char *name,
+uint32 nargs, ...)
+{
+    //from stdargs
+    // va_list arguments;
+    // va_start(arguments, nargs);
+
+    pid32 pid = create(funcaddr, ssize, priority, name, nargs, /*arguments*/   );   //create stack
+
+    
+    if (pid == SYSERR) return SYSERR;
+
+    pd_t* new_page_dir = alloc_new_pd();
+    proctab[pid].pdbr = (uint32)new_page_dir;
+
+    proctab[pid].heapstart = (char*)USER_HEAP_START;
+    proctab[pid].heapend = (char*)USER_HEAP_END;
+
+    init_heap(&proctab[pid]);
+
+    return pid;
+}
+/////////////////////////////////
+//vmalloc
+
+
+//vfree
+
+
+//pagefault.c will be what actaully allocates physical frames
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void dump_pd() {
-    pd_t *pd = (pd_t *)first_page_directory;
+    pd_t *pd = (pd_t *)kernels_directory;
     int i;
     for(i=0; i<1024; i++) {
         if(pd[i].pd_pres) {
@@ -96,7 +171,7 @@ void dump_pd() {
 
 void dump_pt(void)
 {
-    pd_t *pd = (pd_t *)first_page_directory;
+    pd_t *pd = (pd_t *)kernels_directory;
     uint32 pd_index = 0;
     for (pd_index = 0; pd_index < XINU_PAGE_DIRECTORY_LENGTH; pd_index++) {
 
@@ -137,6 +212,9 @@ uint32 used_ffs_frames(pid32 pid){
 uint32 allocated_virtual_pages(pid32 pid){
     return 0;
 }
+
+
+
 // 0x02000000  ------------------------+
 //                                     |
 //             PAGE DIRECTORY          |

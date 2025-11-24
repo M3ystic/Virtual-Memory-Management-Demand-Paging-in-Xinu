@@ -40,6 +40,12 @@
 
 /* Definition of the process table (multiple of 32 bits) */
 
+struct memblock
+{
+	struct memblock* nextblock;
+	uint32 blocklength;
+};
+
 struct procent {		/* Entry in the process table		*/
 	uint16	prstate;	/* Process state: PR_CURR, etc.		*/
 	pri16	prprio;		/* Process priority			*/
@@ -53,6 +59,13 @@ struct procent {		/* Entry in the process table		*/
 	bool8	prhasmsg;	/* Nonzero iff msg is valid		*/
 	int16	prdesc[NDESC];	/* Device descriptors for process	*/
 	bool8   user_process;
+	uint32  pdbr;           /* Page Directory Base Register     */
+
+	char*   heapstart;
+	char*   heapend;
+
+	struct memblock* heapmlist;
+	
 };
 
 /* Marker for the top of a process stack (used to help detect overflow)	*/
