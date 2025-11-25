@@ -1,5 +1,6 @@
 #include <xinu.h>
 #include <stdarg.h>
+#include <math.h>
 
 
 uint32 next_free_pt_frame = PAGE_TABLE_AREA_START_ADDRESS;
@@ -87,12 +88,18 @@ pd_t* alloc_new_pd()
 ///////////////////////////////////
 void init_heap(struct procent* proc)
 {
+     struct memblock* heapstartedge = (struct memblock*)proc->heapstart;
 
-     struct memblock* startofheap = (struct memblock*)proc->heapstart;
+     struct memblock* startofheap = (struct memblock*)(proc->heapstart + sizeof(struct memblock));
+
+     proc->heapmlist = heapstartedge;
+     heapstartedge->nextblock = startofheap;
+     heapstartedge->blocklength = 0; //not used
+
      startofheap->nextblock = NULL;
-     startofheap->blocklength = (uint32)(proc->heapend - proc->heapstart);  //should be 128MB
+     startofheap->blocklength = (uint32)(proc->heapend - (char*)startofheap);
 
-     proc->heapmlist = startofheap;
+
 }
 /////////////
 /////////////
@@ -131,6 +138,41 @@ uint32 nargs, ...)
 }
 /////////////////////////////////
 //vmalloc
+
+char* vmalloc (uint32 nbytes)
+{
+        if(nbytes == 0){
+            return NULL;
+        }
+        struct memblock* previous_block  = proctab[currpid].heapmlist;
+        struct memblock* curr = previous_block->nextblock;
+
+
+        if (nbytes % 4096 != 0){
+            nbytes = ((nbytes / 4096) + 1) * 4096;
+        }
+        
+        while(curr != NULL){
+            if(curr->blocklength >= nbytes){
+                if(curr->blocklength == nbytes){
+                    previous_block->nextblock = curr->nextblock;   
+                    return (char*)curr;
+                } else {
+                    struct memblock* newblock = (struct memblock*)((uint32)curr + nbytes);
+                    newblock->blocklength = curr->blocklength - nbytes;
+                    newblock->nextblock = curr->nextblock;
+                    previous_block->nextblock = newblock;
+
+                    curr->blocklength = nbytes;
+                    return (char*)curr;
+                }
+            }
+            previous_block = curr;
+            curr = curr->nextblock;
+        }
+        return SYSERR;
+}
+
 
 
 //vfree
