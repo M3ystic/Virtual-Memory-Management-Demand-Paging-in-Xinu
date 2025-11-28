@@ -1,6 +1,6 @@
 #include <xinu.h>
 #include <stdarg.h>
-#include <math.h>
+
 
 
 uint32 next_free_pt_frame = PAGE_TABLE_AREA_START_ADDRESS;
@@ -8,6 +8,8 @@ uint32 kernels_directory;
 bool8 page_in_use[XINU_PAGES];      // this table is used to track phys page availability
 bool8 ffs_in_use[MAX_FFS_SIZE];
 bool8 ss_in_use[MAX_SWAP_SIZE];
+
+// extern pid32 create();
 
 ////////////////////////////////////////
 //////////////////////////////////////
@@ -62,22 +64,18 @@ void page_table_init()
 // allocate new page directory table
 pd_t* alloc_new_pd()
 {
-    // get and initialize new PD table for this process
-    pd_t* new_pdbr =  (pd_t* )get_next_free_page();
-    if (new_pdbr == NULL) {
-        kprintf("no free frames for page directory\n");
-    }
-    memset(new_pdbr, 0, PAGE_SIZE);
+     pd_t* newpd = get_next_free_page();
+    memset(newpd, 0, PAGE_SIZE);
 
-    pd_t* kernels_directory_casted = (pd_t*)(kernels_directory);   //cast  it into pd type
+    pd_t* kpd = (pd_t*)kernels_directory;
 
-    // just need to copy kernel entries into users adress space
-    uint8 pd_index;
-    for (pd_index = 0; pd_index < XINU_PAGE_DIRECTORY_LENGTH; pd_index++) {
-        new_pdbr[pd_index]= kernels_directory_casted[pd_index];    // now this new page diectory has xinus
+    // Copy ONLY the kernel PDE entries (typically 0–7, and maybe a few high ones)
+    int i;
+    for (i = 0; i < 8; i++) {
+        newpd[i] = kpd[i];
     }
 
-    return new_pdbr;
+    return newpd;
 }
 ///////////////////////////////////
 ///////////////////////////////////
@@ -85,7 +83,7 @@ void init_heap(struct procent* proc)
 {
      struct memblock* heapstartedge = (struct memblock*)proc->heapstart;
 
-     struct memblock* startofheap = (struct memblock*)(proc->heapstart + sizeof(struct memblock));
+     struct memblock* startofheap = (struct memblock*)(proc->heapstart + PAGE_SIZE);
 
      proc->heapmlist = heapstartedge;
      heapstartedge->nextblock = startofheap;
@@ -121,15 +119,17 @@ void reservespace(uint32 va_start, uint32 pages, pid32 pid)
             pagedirentry->pd_user = 1;
             pagedirentry->pd_base = ((uint32)new_pt) >> 12; 
         }
+        else {
+            pt_t *ptable = (pt_t*)(pagedirentry->pd_base << 12);
+            pt_t* pagetableentry = &ptable[pt_index];
 
-        pt_t *ptable = (pt_t*)(pagedirentry->pd_base << 12);
-        pt_t* pagetableentry = &ptable[pt_index];
+            pagetableentry->pt_pres  = 0;
+            pagetableentry->pt_avail = 1;
+            pagetableentry->pt_write = 1;
+            pagetableentry->pt_user  = 1;
+            pagetableentry->pt_base  = 0; //dont know
+        }
 
-        pagetableentry->pt_pres  = 0;
-        pagetableentry->pt_avail = 1;
-        pagetableentry->pt_write = 1;
-        pagetableentry->pt_user  = 1;
-        pagetableentry->pt_base  = 0; //dont know
 
     }
 }
@@ -140,27 +140,48 @@ void freeffsframe(uint32 frameaddr)
     uint32 frameindex = (frameaddr - FFS_START) / PAGE_SIZE;
     ffs_in_use[frameindex] = FALSE;
 }
+void free_page_frame(uint32 frameaddr)
+{
+    if (frameaddr < PAGE_TABLE_AREA_START_ADDRESS || frameaddr >= PAGE_TABLE_AREA_END_ADDRESS)
+        return; 
+    uint32 frameindex = (frameaddr - PAGE_TABLE_AREA_START_ADDRESS) / PAGE_SIZE;
+    page_in_use[frameindex] = FALSE;
+}
 /////////////
 /////////////
-// pid32 create_help (void *funcaddr, uint32 ssize, pri16 priority, char *name,
-// uint32 nargs, va_list arguments)
-// {
-//     uint32 n[nargs];
-//     int i; for (i = 0; i < nargs; i++) n[i] = va_arg(arguments, uint32);
-
-//     pid32 returnpid = create()
-
-// }      i dont know how to get by the variable arguments
+pid32 create_help (void *funcaddr, uint32 ssize, pri16 priority, char *name,
+uint32 nargs, va_list arguments)
+{
+    uint32 n[nargs];
+    int i; for (i = 0; i < nargs; i++) n[i] = va_arg(arguments, uint32);
+    
+    switch(nargs){
+        case 0: return create(funcaddr, ssize, priority, name, 0);
+        case 1: return create(funcaddr, ssize, priority, name, 1, n[0]);
+        case 2: return create(funcaddr, ssize, priority, name, 2, n[0], n[1]);
+        case 3: return create(funcaddr, ssize, priority, name, 3, n[0], n[1], n[2]);
+        case 4: return create(funcaddr, ssize, priority, name, 4, n[0], n[1], n[2], n[3]);
+        case 5: return create(funcaddr, ssize, priority, name, 5, n[0], n[1], n[2], n[3], n[4]);
+        case 6: return create(funcaddr, ssize, priority, name, 6, n[0], n[1], n[2], n[3], n[4], n[5]);
+        case 7: return create(funcaddr, ssize, priority, name, 7, n[0], n[1], n[2], n[3], n[4], n[5], n[6]);
+        case 8: return create(funcaddr, ssize, priority, name, 8, n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7]);
+        case 9: return create(funcaddr, ssize, priority, name, 9, n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7], n[8]);
+        case 10: return create(funcaddr, ssize, priority, name, 10, n[0], n[1], n[2], n[3], n[4], n[5], n[6], n[7], n[8], n[9]);
+        default: return SYSERR;
+    }
+    return SYSERR;
+}     
 
 pid32 vcreate (void *funcaddr, uint32 ssize, pri16 priority, char *name,
 uint32 nargs, ...)
 {
     //from stdargs
-    // va_list arguments;
-    // va_start(arguments, nargs);
+    va_list arguments;
+    va_start(arguments, nargs);
 
-    pid32 pid = create(funcaddr, ssize, priority, name, nargs, /*arguments*/   );   //create stack
+    pid32 pid = create_help(funcaddr, ssize, priority, name, nargs, arguments);   //create stack
 
+    va_end(arguments);
     
     if (pid == SYSERR) return SYSERR;
 
@@ -179,7 +200,7 @@ uint32 nargs, ...)
 char* vmalloc (uint32 nbytes)
 {
     if(nbytes == 0)
-        return SYSERR;
+        return NULL;
 
     if (nbytes % 4096 != 0)
         nbytes = ((nbytes / 4096) + 1) * 4096;
@@ -220,92 +241,121 @@ char* vmalloc (uint32 nbytes)
         previous_block = curr;
         curr = curr->nextblock;
     }
-    return SYSERR;
+    return (char*)SYSERR;
 }
 /////////////////////
 ////////////////////
-syscall vfree (char* ptr, uint32 bytes)
+syscall vfree(char *ptr, uint32 bytes)
 {
-    
-    if (bytes == 0) return SYSERR;
-    
-    if (bytes %  4096 != 0 )
-        bytes = ((bytes /4096) + 1) * 4096;
-    
+    struct procent *process = &proctab[currpid];
 
-    if ((uint32)ptr < (uint32)USER_HEAP_START || (uint32)ptr >= (uint32)USER_HEAP_END) 
+    if (bytes == 0)
         return SYSERR;
 
-    if ((uint32)ptr % 4096 != 0) 
-        return SYSERR;  
+    //round to page
+    if (bytes % PAGE_SIZE != 0)
+        bytes = ((bytes + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
 
-    struct memblock *newblock = (struct memblock*)ptr;
+    uint32 virtual_start = (uint32)ptr;
+    uint32 virtual_end   = virtual_start + bytes;
+
+    //check range and alignmnet
+    if (virtual_start < (uint32)process->heapstart || virtual_end > (uint32)process->heapend)
+        return SYSERR;
+
+    if (virtual_start % PAGE_SIZE != 0)
+        return SYSERR;
+
+    uint32 pages = bytes / PAGE_SIZE;
+    pd_t *pagedir = (pd_t *)process->pdbr;
+
+    /* validate region */
+    uint32 i;                        // moved out of loop
+    uint32 virtual_address;          // moved out of loop
+    virt_addr_t *virtaddr;           // moved out of loop
+    pd_t *pagedirentry;              // moved out of loop
+    pt_t *pagetable;                 // moved out of loop
+    pt_t *pagetableentry;            // moved out of loop
+
+    for (i = 0; i < pages; i++) {
+        virtual_address = virtual_start + i * PAGE_SIZE;
+        virtaddr = (virt_addr_t *)&virtual_address;
+
+        pagedirentry = &pagedir[virtaddr->pd_offset];
+        if (pagedirentry->pd_pres == 0)
+            return SYSERR;
+
+        pagetable = (pt_t *)(pagedirentry->pd_base << 12);
+        pagetableentry = &pagetable[virtaddr->pt_offset];
+
+        //not mapped or reserved
+        if (pagetableentry->pt_pres == 0 && pagetableentry->pt_avail == 0)
+            return SYSERR;
+    }
+
+    //insert free space and coalesce
+    struct memblock *newblock = (struct memblock *)ptr;
     newblock->blocklength = bytes;
 
-    struct memblock *prevblock = proctab[currpid].heapmlist;
-    struct memblock* currblock = prevblock->nextblock;
+    struct memblock *previousblock = process->heapmlist;
+    struct memblock *currentblock = previousblock->nextblock;
 
-    while (currblock != NULL && currblock < newblock)
-    {
-        prevblock = currblock;
-        currblock = currblock->nextblock;
+    while (currentblock != NULL && currentblock < newblock) {
+        previousblock = currentblock;
+        currentblock = currentblock->nextblock;
     }
 
-    uint32 prevblkend   = (uint32)prevblock + prevblock->blocklength;
-    uint32 newblkend    = (uint32)ptr + bytes;
-    uint32 currblkstart = (uint32)currblock; 
+    uint32 prev_end = (uint32)previousblock + previousblock->blocklength;
+    uint32 curr_start = (currentblock == NULL ?
+                         (uint32)process->heapend :
+                         (uint32)currentblock);
+    uint32 new_end = virtual_end;
 
-    if (prevblkend > (uint32)ptr || newblkend > currblkstart)
+    if (prev_end > virtual_start || new_end > curr_start)
         return SYSERR;
-    
-    newblock->nextblock = currblock;
-    prevblock->nextblock = newblock;
 
-    if (newblkend == currblkstart){
-        newblock->blocklength += currblock->blocklength;
-        newblock->nextblock  = currblock->nextblock;
-    }
-    if (prevblkend == ptr){
-        prevblock->blocklength += newblock->blocklength;
-        prevblock->nextblock  = newblock->nextblock;
+    newblock->nextblock = currentblock;
+    previousblock->nextblock = newblock;
+
+    //coalesce 
+    if (new_end == curr_start) {
+        newblock->blocklength += currentblock->blocklength;
+        newblock->nextblock = currentblock->nextblock;
     }
 
-    // free the frames that were used
-    uint32 va_start = (uint32)ptr;
-    uint32 pages = bytes / 4096;
-    pd_t* pagedir = (pd_t*)proctab[currpid].pdbr;
+    //coalesce with previous
+    if (previousblock != process->heapmlist) {
+        prev_end = (uint32)previousblock + previousblock->blocklength;
+        if (prev_end == virtual_start) {
+            previousblock->blocklength += newblock->blocklength;
+            previousblock->nextblock = newblock->nextblock;
+            newblock = previousblock;
+        }
+    }
 
+    //free frames 
+    for (i = 0; i < pages; i++) {
+        virtual_address = virtual_start + i * PAGE_SIZE;
+        virtaddr = (virt_addr_t *)&virtual_address;
 
-    int i;
-    for (i = 0; i < pages; i++){
-        uint32 va = va_start + (i * PAGE_SIZE);
-
-        virt_addr_t* vaddr = (virt_addr_t*)&va;
-
-        uint32 pd_index = vaddr->pd_offset;
-        uint32 pt_index = vaddr->pt_offset;
-
-        if (pagedir[pd_index].pd_pres == 0)
-            continue;
-
-        pt_t *ptable = (pt_t*)(pagedir->pd_base << 12);
-        pt_t* pagetableentry = &ptable[pt_index];
+        pagedirentry = &pagedir[virtaddr->pd_offset];
+        pagetable = (pt_t *)(pagedirentry->pd_base << 12);
+        pagetableentry = &pagetable[virtaddr->pt_offset];
 
         if (pagetableentry->pt_pres == 1) {
-            uint32 frameaddr = pagetableentry->pt_base << 12;
-
-            if (frameaddr >= FFS_START && frameaddr < FFS_END) {
-                freeffsframe(frameaddr);
-            }
+            uint32 physical_frame_address = pagetableentry->pt_base << 12;
+            if (physical_frame_address >= FFS_START && physical_frame_address < FFS_END)
+                freeffsframe(physical_frame_address);
         }
 
+        /* Correct lazy reset */
         pagetableentry->pt_pres  = 0;
         pagetableentry->pt_avail = 1;
-        pagetableentry->pt_base  = 0; //reset
-
+        pagetableentry->pt_base  = 0;
     }
 
-    proctab[currpid].allocvpages -= (bytes/4096);
+    process->allocvpages -= pages;
+
     return OK;
 }
 /////////////////////
@@ -319,7 +369,7 @@ uint32 free_ffs_pages(){
             free_count++;
     }
 
-    return free_count;
+    return free_count; 
 }
 ///////////////////
 //////////////////
@@ -328,7 +378,7 @@ uint32 used_ffs_frames(pid32 pid){
     uint32 pdentry;
     pd_t* pdir = (pd_t*)proctab[pid].pdbr;
 
-     for (pdentry = 0; pdentry < 1023; pdentry++){
+     for (pdentry = 0; pdentry < 1024; pdentry++){
         if (pdir[pdentry].pd_pres == 0)
             continue;
     
@@ -337,7 +387,7 @@ uint32 used_ffs_frames(pid32 pid){
 
         uint32 ptentry;
 
-        for (ptentry = 0; ptentry < 1023; ptentry++){
+        for (ptentry = 0; ptentry < 1024; ptentry++){
         if (ptable[ptentry].pt_pres == 0)
             continue;
 
@@ -353,6 +403,18 @@ uint32 used_ffs_frames(pid32 pid){
 /////////////////
 uint32 allocated_virtual_pages(pid32 pid){
     return proctab[pid].allocvpages;
+}
+/////////////////
+/////////////////
+uint32 new_ffs_frame(){
+    uint32 frame;
+    for (frame = 0; frame < MAX_FFS_SIZE; frame++){
+        if (ffs_in_use[frame] == FALSE){
+            ffs_in_use[frame] = TRUE;
+            return (frame * PAGE_SIZE) + FFS_START;
+        }
+    }
+    return SYSERR;
 }
 //////////////////////////
 ////////////////////////

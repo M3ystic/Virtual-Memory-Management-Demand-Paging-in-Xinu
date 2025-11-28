@@ -7,10 +7,10 @@
  *------------------------------------------------------------------------
  */
 
-syscall	vfree(
-	  char* ptr,
-      uint32 size
-	)
-{
-    return OK;
-}
+// syscall	vfree(
+// 	  char* ptr,
+//       uint32 size
+// 	)
+// {
+//     return OK;
+// }

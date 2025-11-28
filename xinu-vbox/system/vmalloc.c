@@ -7,9 +7,9 @@
  *------------------------------------------------------------------------
  */
 
-char*	vmalloc(
-	  uint32 size
-	)
-{
-    return NULL;
-}
+// char*	vmalloc(
+// 	  uint32 size
+// 	)
+// {
+//     return NULL;
+// }
