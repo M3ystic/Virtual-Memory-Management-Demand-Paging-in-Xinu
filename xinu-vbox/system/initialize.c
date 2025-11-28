@@ -223,12 +223,25 @@ static	void	sysinit()
 		init(i);
 	}
 
+	// kernel page directory
+	init_pt_used();
+	
+	// initialize ffs
+	init_ffs();
 
-	////
+	// allocate a frame for the page directory
+	//alloc_new_pd();
+
+	// allocate and initialize the first page tables
 	page_table_init();
+
+	// load cr3  
 	write_cr3(first_page_directory);
+
+	
 	dump_pd();
 	dump_pt();
+	
 	enable_paging();
 
 	return;

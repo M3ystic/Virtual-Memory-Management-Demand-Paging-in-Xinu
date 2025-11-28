@@ -57,14 +57,26 @@ pid32	vcreate(
 	prptr->prdesc[1] = CONSOLE;
 	prptr->prdesc[2] = CONSOLE;
 
-    //page_table_init();
-	//write_cr3(first_page_directory);
-	//dump_pd();
-	//dump_pt();
-
 	// allocate and initialize new PD table for this process
-    alloc_new_pd();
+	prptr->pdbr = alloc_new_pd();
+	prptr->vhpbase = VHEAP_START;
+	prptr->vhpnpages = (uint32)roundmb(VHEAP_END - VHEAP_START) / PAGE_SIZE;
+	
+	// copy kernel PDE first 8 entries
 
+	// create process virutal heap info
+	/* build simple vmem free list for the heap */
+	/*
+    prptr->vmemlist.mnext = (struct mblock *)prptr->vhpstart;
+    prptr->vmemlist.mlength = prptr->vhpnpages * PAGE_SIZE;
+
+    struct mblock *firstblk = (struct mblock *)prptr->vhpstart;
+    firstblk->mnext = NULL;
+    firstblk->mlength = prptr->vmemlist.mlength;
+
+	// set pdbr to phsycia address  
+	write_cr3(proctab[currpid].pdbr);
+	*/
 
 	/* Initialize stack as if the process was called		*/
 

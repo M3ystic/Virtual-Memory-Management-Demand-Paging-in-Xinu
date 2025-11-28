@@ -2,12 +2,12 @@
 
 #include <kernel.h>
 #include <conf.h>
+#include <memory.h>
 #include <process.h>
 #include <queue.h>
 #include <resched.h>
 #include <mark.h>
 #include <semaphore.h>
-#include <memory.h>
 #include <bufpool.h>
 #include <clock.h>
 #include <ports.h>
@@ -31,6 +31,11 @@
 #include <name.h>
 #include <shell.h>
 #include <date.h>
+
+//new
+#include <paging.h>
+#include <paging_helper.h>
+
 #include <prototypes.h>
 #include <delay.h>
 #include <i386.h>
@@ -41,6 +46,4 @@
 #include <multiboot.h>
 #include <stdio.h>
 #include <string.h>
-//new
-#include <paging.h>
-#include <paging_helper.h>
+

@@ -55,6 +55,10 @@ pid32	create(
 	prptr->prdesc[1] = CONSOLE;
 	prptr->prdesc[2] = CONSOLE;
 
+	prptr->pdbr = 0;
+	prptr->vhpbase = VHEAP_START;
+	//prptr->vhpnpages = (uint32)roundmb(VHEAP_END - VHEAP_START) / PAGE_SIZE;
+
 	/* Initialize stack as if the process was called		*/
 
 	*saddr = STACKMAGIC;
