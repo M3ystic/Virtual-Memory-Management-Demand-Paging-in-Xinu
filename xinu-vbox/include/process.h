@@ -60,6 +60,7 @@ struct procent {		/* Entry in the process table		*/
 	int16	prdesc[NDESC];	/* Device descriptors for process	*/
 	bool8   user_process;
 	uint32  pdbr;           /* Page Directory Base Register     */
+	uint32  allocvpages;     /*list of allocated virtual pages*/
 
 	char*   heapstart;
 	char*   heapend;

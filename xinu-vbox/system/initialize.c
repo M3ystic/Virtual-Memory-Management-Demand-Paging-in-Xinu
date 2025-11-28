@@ -226,7 +226,8 @@ static	void	sysinit()
 
 	////
 	page_table_init();
-	write_cr3(first_page_directory);
+	set_evec(14, (uint32)pagefault_handler_disp);
+	write_cr3(kernels_directory);
 	dump_pd();
 	dump_pt();
 	enable_paging();
