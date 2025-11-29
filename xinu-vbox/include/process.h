@@ -40,12 +40,6 @@
 
 /* Definition of the process table (multiple of 32 bits) */
 
-struct memblock
-{
-	struct memblock* nextblock;
-	uint32 blocklength;
-};
-
 struct procent {		/* Entry in the process table		*/
 	uint16	prstate;	/* Process state: PR_CURR, etc.		*/
 	pri16	prprio;		/* Process priority			*/
@@ -65,7 +59,7 @@ struct procent {		/* Entry in the process table		*/
 	char*   heapstart;
 	char*   heapend;
 
-	struct memblock* heapmlist;
+	struct memblk* heapmlist;
 	
 };
 

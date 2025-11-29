@@ -14,9 +14,11 @@
 #define FFS_END    (FFS_START + MAX_FFS_SIZE*PAGE_SIZE - 1)
 
 
-//virtual mem
+// virtual mem
 #define USER_HEAP_START  0x02000000   //start at 32MB
 #define USER_HEAP_END   0x12000000   //end start to end is 256MB
+
+bool8 pt_used[XINU_PAGE_DIRECTORY_LENGTH + 1]; // this table is used to track phys page availability
 
 extern uint32 kernels_directory;
 

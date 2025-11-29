@@ -3,8 +3,9 @@
 
 /* NOTE: set QUANTUM to 10ms */
 
+#define ECE565
 #define TEST1
-//#define TEST2 
+#define TEST2 
 //#define TEST3
 //#define TEST4
 
@@ -148,7 +149,7 @@ process vmalloc_process2(uint32 numPages, bool8 debug){
 process	main(void)
 {
 
-	//uint32 i = 0;
+	uint32 i = 0;
 
 	sync_printf("\n\nTESTS START NOW...\n");
 	sync_printf("-------------------\n\n");
@@ -164,10 +165,10 @@ process	main(void)
 
 	resume(vcreate((void *)empty_process, INITSTK, 1, "p1", 0));
 	sleepms(1000);	
-	//resume(vcreate((void *)empty_process, INITSTK, 1, "p2", 0));
+	resume(vcreate((void *)empty_process, INITSTK, 1, "p2", 0));
 
 	receive();
-	//receive();
+	receive();
 
 	sync_printf("P%d:: Free FFS pages = %d out of %d\n\n", currpid, free_ffs_pages(), MAX_FFS_SIZE);
 

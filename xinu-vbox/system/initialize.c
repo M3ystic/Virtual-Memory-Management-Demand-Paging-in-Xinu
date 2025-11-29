@@ -223,9 +223,12 @@ static	void	sysinit()
 		init(i);
 	}
 
-
-	////
+	// set any to false in page_in_use table
+	init_pt_used();
+	// initialize ffs
+	//init_ffs();
 	page_table_init();
+
 	set_evec(14, (uint32)pagefault_handler_disp);
 	write_cr3(kernels_directory);
 	dump_pd();
