@@ -225,8 +225,7 @@ static	void	sysinit()
 
 	// set any to false in page_in_use table
 	init_pt_used();
-	// initialize ffs
-	//init_ffs();
+
 	page_table_init();
 
 	set_evec(14, (uint32)pagefault_handler_disp);

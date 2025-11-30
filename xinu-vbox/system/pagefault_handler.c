@@ -2,7 +2,6 @@
 
 void pagefault_handler()
 {
-
     uint32 faultaddr = read_cr2();
 
     struct procent *pr = &proctab[currpid];
@@ -39,7 +38,6 @@ void pagefault_handler()
         kill(currpid);
         return;
     }
-
     if (pagetablentry->pt_pres == 0 && pagetablentry->pt_avail == 1){
         uint32 newphyframe = new_ffs_frame();
             if (newphyframe == (uint32)SYSERR){
@@ -57,6 +55,6 @@ void pagefault_handler()
         write_cr3(proctab[currpid].pdbr); //reloads it
     }
 
-     kprintf("should never get here, process: %d\n", currpid);
+    kprintf("should never get here, process: %d\n", currpid);
     return;
 }

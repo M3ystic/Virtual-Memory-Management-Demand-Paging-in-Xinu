@@ -169,8 +169,10 @@ void reservespace(uint32 va_start, uint32 pages, pid32 pid)
 
         virt_addr_t* vaddr = (virt_addr_t*)&va;
 
-        uint32 pd_index = vaddr->pd_offset;
-        uint32 pt_index = vaddr->pt_offset;
+        int32 pd_index = (va >> 22) & 0x3FF;
+        uint32 pt_index = (va >> 12) & 0x3FF;
+        //uint32 pd_index = vaddr->pd_offset;
+        //uint32 pt_index = vaddr->pt_offset;
 
         pd_t* pagedirentry = &pdir[pd_index];
         if (pagedirentry->pd_pres == 0){
@@ -182,7 +184,6 @@ void reservespace(uint32 va_start, uint32 pages, pid32 pid)
             pagedirentry->pd_user = 1;
             pagedirentry->pd_base = ((uint32)new_pt) >> 12; 
         }
-        else {
             pt_t *ptable = (pt_t*)(pagedirentry->pd_base << 12);
             pt_t* pagetableentry = &ptable[pt_index];
 
@@ -191,9 +192,6 @@ void reservespace(uint32 va_start, uint32 pages, pid32 pid)
             pagetableentry->pt_write = 1;
             pagetableentry->pt_user  = 1;
             pagetableentry->pt_base  = 0; //dont know
-        }
-
-
     }
 }
 
@@ -245,13 +243,11 @@ uint32 nargs, ...)
     //from stdargs, read variable arguments
     va_list arguments;
     va_start(arguments, nargs);
-
     // create stack and process
     pid32 pid = create_help(funcaddr, ssize, priority, name, nargs, arguments);   
     va_end(arguments);
     
     if (pid == SYSERR) return SYSERR;
-
     // initialize heap memory list
     init_heap(&proctab[pid]);
     return pid;
@@ -308,10 +304,10 @@ syscall vfree(char *ptr, uint32 bytes)
 {
     struct procent *process = &proctab[currpid];
 
-    if (bytes == 0)
+    if (ptr == NULL || bytes == 0)
         return SYSERR;
 
-    //round to page
+    // round to page
     if (bytes % PAGE_SIZE != 0)
         bytes = ((bytes + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
 
@@ -336,6 +332,7 @@ syscall vfree(char *ptr, uint32 bytes)
     pt_t *pagetable;                 // moved out of loop
     pt_t *pagetableentry;            // moved out of loop
 
+    // unmap pages from page table
     for (i = 0; i < pages; i++) {
         virtual_address = virtual_start + i * PAGE_SIZE;
         virtaddr = (virt_addr_t *)&virtual_address;
@@ -350,64 +347,15 @@ syscall vfree(char *ptr, uint32 bytes)
         //not mapped or reserved
         if (pagetableentry->pt_pres == 0 && pagetableentry->pt_avail == 0)
             return SYSERR;
-    }
 
-    //insert free space and coalesce
-    struct memblk *newblock = (struct memblk *)ptr;
-    newblock->mlength = bytes;
-
-    struct memblk *previousblock = process->heapmlist;
-    struct memblk *currentblock = previousblock->mnext;
-
-    while (currentblock != NULL && currentblock < newblock) {
-        previousblock = currentblock;
-        currentblock = currentblock->mnext;
-    }
-
-    uint32 prev_end = (uint32)previousblock + previousblock->mlength;
-    uint32 curr_start = (currentblock == NULL ?
-                         (uint32)process->heapend :
-                         (uint32)currentblock);
-    uint32 new_end = virtual_end;
-
-    if (prev_end > virtual_start || new_end > curr_start)
-        return SYSERR;
-
-    newblock->mnext = currentblock;
-    previousblock->mnext = newblock;
-
-    //coalesce 
-    if (new_end == curr_start) {
-        newblock->mlength += currentblock->mlength;
-        newblock->mnext = currentblock->mnext;
-    }
-
-    //coalesce with previous
-    if (previousblock != process->heapmlist) {
-        prev_end = (uint32)previousblock + previousblock->mlength;
-        if (prev_end == virtual_start) {
-            previousblock->mlength += newblock->mlength;
-            previousblock->mnext = newblock->mnext;
-            newblock = previousblock;
-        }
-    }
-
-    //free frames 
-    for (i = 0; i < pages; i++) {
-        virtual_address = virtual_start + i * PAGE_SIZE;
-        virtaddr = (virt_addr_t *)&virtual_address;
-
-        pagedirentry = &pagedir[virtaddr->pd_offset];
-        pagetable = (pt_t *)(pagedirentry->pd_base << 12);
-        pagetableentry = &pagetable[virtaddr->pt_offset];
-
+        // free ffs frame if allocated
         if (pagetableentry->pt_pres == 1) {
             uint32 physical_frame_address = pagetableentry->pt_base << 12;
             if (physical_frame_address >= FFS_START && physical_frame_address < FFS_END)
                 freeffsframe(physical_frame_address);
         }
 
-        /* Correct lazy reset */
+        /* correct lazy reset */
         pagetableentry->pt_pres  = 0;
         pagetableentry->pt_avail = 1;
         pagetableentry->pt_base  = 0;
@@ -415,6 +363,49 @@ syscall vfree(char *ptr, uint32 bytes)
 
     process->allocvpages -= pages;
 
+    struct memblk *previousblock = process->heapmlist;
+    struct memblk *currentblock = previousblock->mnext;
+
+    // check overlapping with existing free blocks
+    while (currentblock != NULL && (uint32)currentblock < virtual_start) {
+        previousblock = currentblock;
+        currentblock = currentblock->mnext;
+    }
+    
+    uint32 prev_end = (uint32)previousblock + previousblock->mlength;
+    uint32 curr_start = (currentblock == NULL ?
+                         (uint32)process->heapend :
+                         (uint32)currentblock);
+                         
+    if (prev_end > virtual_start || virtual_end > curr_start)
+        return SYSERR;
+
+    //insert free space and coalesce
+    struct memblk *newblock = (struct memblk *)ptr;
+    if (newblock == NULL)
+        return SYSERR;
+
+    newblock->mlength = bytes;
+    newblock->mnext = currentblock;
+    previousblock->mnext = newblock;
+    
+    //coalesce 
+    if (currentblock!= NULL && virtual_end == curr_start) {
+        newblock->mlength += currentblock->mlength;
+        newblock->mnext = currentblock->mnext;
+        freemem((char*)currentblock, sizeof(struct memblk));
+    }
+    
+    //coalesce with previous
+    if (previousblock != process->heapmlist) {
+        prev_end = (uint32)previousblock + previousblock->mlength;
+        if (prev_end == virtual_start) {
+            previousblock->mlength += newblock->mlength;
+            previousblock->mnext = newblock->mnext;
+            freemem((char*)newblock, sizeof(struct memblk));
+        }
+    }
+    
     return OK;
 }
 ///////////////////////////////////
@@ -422,12 +413,10 @@ syscall vfree(char *ptr, uint32 bytes)
 uint32 free_ffs_pages(){
     uint32 free_count = 0;
     uint32 frame;
-
     for (frame = 0; frame < MAX_FFS_SIZE; frame++){
         if (ffs_in_use[frame] == FALSE)
             free_count++;
     }
-
     return free_count; 
 }
 ///////////////////////////////////
@@ -440,18 +429,15 @@ uint32 used_ffs_frames(pid32 pid){
      for (pdentry = 0; pdentry < 1024; pdentry++){
         if (pdir[pdentry].pd_pres == 0)
             continue;
-    
         uint32 ptaddr = pdir[pdentry].pd_base << 12;
         pt_t* ptable= (pt_t*)ptaddr;
 
         uint32 ptentry;
-
         for (ptentry = 0; ptentry < 1024; ptentry++){
         if (ptable[ptentry].pt_pres == 0)
             continue;
 
         uint32 frameaddr = ptable[ptentry].pt_base << 12;
-        
         if (frameaddr >= FFS_START && frameaddr < FFS_END)
             used_count++;
      }
