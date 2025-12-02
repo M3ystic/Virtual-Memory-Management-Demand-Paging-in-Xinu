@@ -43,6 +43,7 @@ pid32	currpid;		/* ID of currently executing process	*/
  * such as kprintf.
  *------------------------------------------------------------------------
  */
+ 
 
 void	nulluser()
 {	
@@ -192,6 +193,7 @@ static	void	sysinit()
 	prptr->prstklen = NULLSTK;
 	prptr->prstkptr = 0;
 	currpid = NULLPROC;
+
 	
 	/* Initialize semaphores */
 
@@ -227,7 +229,7 @@ static	void	sysinit()
 	init_pt_used();
 
 	page_table_init();
-
+	proctab[NULLPROC].pdbr = kernels_directory;
 	set_evec(14, (uint32)pagefault_handler_disp);
 	write_cr3(kernels_directory);
 	dump_pd();

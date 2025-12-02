@@ -62,6 +62,8 @@ pid32	create(
 	////////////////////////////////////////////////
 	// allocate new page directory
 	prptr->pdbr = alloc_new_pd();
+	prptr->user_process = FALSE;
+
 
 	/* Initialize stack as if the process was called		*/
 

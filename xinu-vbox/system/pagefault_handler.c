@@ -1,60 +1,68 @@
 #include <xinu.h>
 
-void pagefault_handler()
+void pagefault_handler(void)
 {
     uint32 faultaddr = read_cr2();
+    struct procent *process = &proctab[currpid];
 
-    struct procent *pr = &proctab[currpid];
-    if (faultaddr < (uint32)pr->heapstart || faultaddr >= (uint32)pr->heapend) {
+    virt_addr_t *virtaddr = (virt_addr_t *)&faultaddr;
+    uint32 pd_index = virtaddr->pd_offset;
+    uint32 pt_index = virtaddr->pt_offset;
+
+    pd_t *pagedir = (pd_t *)process->pdbr;
+    pd_t *pagedirentry = &pagedir[pd_index];
+
+    /*------------------------------------------------------------*/
+    /* 2) PDE must be present                                     */
+    /*------------------------------------------------------------*/
+    if (pagedirentry->pd_pres == 0)
+    {
         kprintf("P<%d>:: SEGMENTATION_FAULT\n", currpid);
         kill(currpid);
         return;
     }
 
-    // uint32 VPN = faultaddr >> 12;
-    // uint32 pagedirmask = 0b11111111110000000000;
-    // uint32 pagetablemask = !(0b11111111110000000000);
-    // uint32 pagediri= pagedirmask >> 12;
-    // uint32 pagetablei = pagetablemask;
+    pt_t *pagetable = (pt_t *)(pagedirentry->pd_base << 12);
+    pt_t *pagetableentry = &pagetable[pt_index];
 
-    virt_addr_t* VPN  = (virt_addr_t*)&faultaddr;
-    uint32 pagediri   = VPN->pd_offset;
-    uint32 pagetablei = VPN->pt_offset;
-
-    pd_t* pdbr = (pd_t*)proctab[currpid].pdbr;
-    pd_t* pagedirentry = &pdbr[pagediri];
-
-    if (pagedirentry->pd_pres == 0){
+    /*------------------------------------------------------------*/
+    /* 3) If PTE is present, this PF should never happen          */
+    /*    → treat as segmentation fault (NO protection fault)     */
+    /*------------------------------------------------------------*/
+    if (pagetableentry->pt_pres == 1)
+    {
         kprintf("P<%d>:: SEGMENTATION_FAULT\n", currpid);
         kill(currpid);
         return;
     }
 
-    pt_t* ptable = (pt_t*)(pagedirentry->pd_base << 12);
-    pt_t* pagetablentry = &ptable[pagetablei];
-
-    if (pagetablentry->pt_pres == 0 && pagetablentry->pt_avail == 0){
+    /*------------------------------------------------------------*/
+    /* 4) If not reserved, segmentation fault                     */
+    /*------------------------------------------------------------*/
+    if (pagetableentry->pt_avail == 0)
+    {
         kprintf("P<%d>:: SEGMENTATION_FAULT\n", currpid);
         kill(currpid);
         return;
     }
-    if (pagetablentry->pt_pres == 0 && pagetablentry->pt_avail == 1){
-        uint32 newphyframe = new_ffs_frame();
-            if (newphyframe == (uint32)SYSERR){
-                kill(currpid);
-                return;
-            }
-        
-        pagetablentry->pt_base = newphyframe >> 12;
-        pagetablentry->pt_pres = 1;
-        pagetablentry->pt_write = 1;
-        pagetablentry->pt_user = 1;
-        pagetablentry->pt_avail = 0;  //clear  
-        
-        memset((void*)newphyframe, 0, 4096);
-        write_cr3(proctab[currpid].pdbr); //reloads it
+
+    /*------------------------------------------------------------*/
+    /* 5) Lazy allocate from FFS                                  */
+    /*------------------------------------------------------------*/
+    uint32 newframe = new_ffs_frame();
+    if (newframe == (uint32)SYSERR)
+    {
+        kprintf("P<%d>:: SEGMENTATION_FAULT\n", currpid);
+        kill(currpid);
+        return;
     }
 
-    kprintf("should never get here, process: %d\n", currpid);
-    return;
+    pagetableentry->pt_base  = newframe >> 12;
+    pagetableentry->pt_pres  = 1;
+    pagetableentry->pt_write = 1;
+    pagetableentry->pt_user  = 1;
+    pagetableentry->pt_avail = 0;
+
+    memset((void *)newframe, 0, PAGE_SIZE);
+    write_cr3(process->pdbr);
 }
