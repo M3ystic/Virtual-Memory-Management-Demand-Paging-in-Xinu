@@ -1,23 +1,16 @@
 /* in file helper_functions.c*/
-extern uint32* get_next_free_page(void);
+
+extern uint32* get_next_free_pt_frame(void);
+
 extern void page_table_init(void);
 extern void dump_pd(void);
 extern void dump_pt(void);
 extern uint32 free_ffs_pages(void);
 extern uint32 allocated_virtual_pages(pid32);
 extern uint32 used_ffs_frames(pid32);
-extern void init_heap(struct procent*);
-extern pid32 vcreate (void*, uint32, pri16, char*, uint32, ...);
-extern char* vmalloc (uint32);
-extern syscall vfree (char*, uint32);
-extern void reservespace(uint32, uint32, pid32);
-extern void freeffsframe(uint32);
-extern void free_page_frame(uint32);
-extern uint32 new_ffs_frame(void);
+extern pd_t* alloc_new_pd(void);
+void init_ffs(void);
 void init_pt_used(void);
-
-/* in file pagefault_handler_disp.S */
-extern void pagefault_handler_disp(void);
 
 extern void pagefault_handler(void);
 

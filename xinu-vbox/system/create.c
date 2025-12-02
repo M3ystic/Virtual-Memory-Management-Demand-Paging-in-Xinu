@@ -54,14 +54,10 @@ pid32	create(
 	prptr->prdesc[0] = CONSOLE;
 	prptr->prdesc[1] = CONSOLE;
 	prptr->prdesc[2] = CONSOLE;
-	prptr->allocvpages = XINU_PAGE_DIRECTORY_LENGTH * PAGE_TABLE_ENTRIES;
-	// initialize user heap boundaries
-    prptr->heapstart = (char*)USER_HEAP_START;
-    prptr->heapend = (char*)USER_HEAP_END;
-	
-	////////////////////////////////////////////////
-	// allocate new page directory
-	prptr->pdbr = alloc_new_pd();
+
+	prptr->pdbr = 0;
+	prptr->vhpbase = VHEAP_START;
+	//prptr->vhpnpages = (uint32)roundmb(VHEAP_END - VHEAP_START) / PAGE_SIZE;
 
 	/* Initialize stack as if the process was called		*/
 

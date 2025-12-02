@@ -54,46 +54,6 @@ syscall	kill(
 		prptr->prstate = PR_FREE;
 	}
 
-
-	if (prptr->pdbr != 0 && prptr->pdbr != kernels_directory){
-        pd_t *pdir = (pd_t *)prptr->pdbr;
-
-        int pd,pt;                  
-        uint32 ptaddr, frameaddr;             
-        pt_t *ptable;             
-
-        for (pd = 0; pd < XINU_PAGE_DIRECTORY_LENGTH; pd++)
-        {
-            if (pdir[pd].pd_pres == 0)
-                continue;
-
-            ptaddr = pdir[pd].pd_base << 12;
-            ptable = (pt_t *)ptaddr;
-
-            for (pt = 0; pt < PAGE_TABLE_ENTRIES; pt++)
-            {
-                if (ptable[pt].pt_pres == 1)
-                {
-                    frameaddr = ptable[pt].pt_base << 12;
-
-                    if (frameaddr >= FFS_START && frameaddr < FFS_END)
-                        freeffsframe(frameaddr);
-                }
-            }
-
-            free_page_frame(ptaddr);
-        }
-
-        free_page_frame(prptr->pdbr);
-
-        prptr->pdbr        = 0;
-        prptr->heapstart   = NULL;
-        prptr->heapend     = NULL;
-        prptr->heapmlist   = NULL;
-        prptr->allocvpages = 0;
-    }
-
-
 	restore(mask);
 	return OK;
 }

@@ -3,10 +3,9 @@
 
 /* NOTE: set QUANTUM to 10ms */
 
-#define ECE565
 #define TEST1
 #define TEST2 
-#define TEST3
+//#define TEST3
 //#define TEST4
 
 void sync_printf(char *fmt, ...)
@@ -149,7 +148,7 @@ process vmalloc_process2(uint32 numPages, bool8 debug){
 process	main(void)
 {
 
-	uint32 i = 0;
+	//uint32 i = 0;
 
 	sync_printf("\n\nTESTS START NOW...\n");
 	sync_printf("-------------------\n\n");
