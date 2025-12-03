@@ -30,7 +30,7 @@ void page_table_init()
 
     kernels_directory =  (uint32)pdbr;
 
-    kprintf("[PT_INIT] Kernel PD base = 0x%08X\n", kernels_directory);
+    // kprintf("[PT_INIT] Kernel PD base = 0x%08X\n", kernels_directory);
 
     uint8 pd_index;
     for (pd_index = 0; pd_index < 8; pd_index++) {
@@ -38,34 +38,34 @@ void page_table_init()
         pt_t* page_table =  (pt_t* )get_next_free_page();
         memset(page_table, 0, PAGE_SIZE);
 
-        kprintf("[PT_INIT] PDE %d -> PT @ 0x%08X\n",
-                pd_index, (uint32)page_table);
+        // kprintf("[PT_INIT] PDE %d -> PT @ 0x%08X\n",
+        //        pd_index, (uint32)page_table);
 
-        pdbr[pd_index].pd_pres = 1;
+        pdbr[pd_index].pd_pres  = 1;
         pdbr[pd_index].pd_write = 1;
-        pdbr[pd_index].pd_user = 0;
-        pdbr[pd_index].pd_base = ((uint32)page_table) >> 12; 
+        pdbr[pd_index].pd_user  = 0;
+        pdbr[pd_index].pd_base  = ((uint32)page_table) >> 12; 
         
         uint16 pt_index;
         for (pt_index = 0; pt_index < PAGE_TABLE_ENTRIES; pt_index++)
         {   
             uint32 phy_frame = (pd_index * 1024 + pt_index) * PAGE_SIZE;
 
-            if (pt_index % 256 == 0)
-                kprintf("[PT_INIT]  PDE=%d PTE=%d frame=0x%08X\n",
-                        pd_index, pt_index, phy_frame);
+            // if (pt_index % 256 == 0)
+            //     kprintf("[PT_INIT]  PDE=%d PTE=%d frame=0x%08X\n",
+            //             pd_index, pt_index, phy_frame);
 
-            page_table[pt_index].pt_pres = 1;
+            page_table[pt_index].pt_pres  = 1;
             page_table[pt_index].pt_write = 1;
-            page_table[pt_index].pt_user = 0;
-            page_table[pt_index].pt_base = ((uint32)phy_frame) >> 12; 
+            page_table[pt_index].pt_user  = 0;
+            page_table[pt_index].pt_base  = ((uint32)phy_frame) >> 12; 
         }
     }
 
     uint32 pd_start = PAGE_TABLE_AREA_START_ADDRESS >> 22;
     uint32 pd_end   = PAGE_TABLE_AREA_END_ADDRESS   >> 22;
 
-    kprintf("[PT_INIT] Mapping PT area PDEs %d..%d\n", pd_start, pd_end);
+    // kprintf("[PT_INIT] Mapping PT area PDEs %d..%d\n", pd_start, pd_end);
 
     uint32 pdi;
     for (pdi = pd_start; pdi <= pd_end; pdi++) {
@@ -74,16 +74,11 @@ void page_table_init()
             continue;
         }
 
-        pt_t *page_table = (pt_t *) get_next_free_page();
-        if (page_table == NULL) {
-            kprintf("[PT_INIT] ERROR: Out of PT frames at PDE=%u\n", pdi);
-            return;
-        }
-
+        pt_t *page_table = (pt_t *)get_next_free_page();
         memset(page_table, 0, PAGE_SIZE);
 
-        kprintf("[PT_INIT] PDE %d -> PT @ 0x%08X (PT area)\n",
-                pdi, (uint32)page_table);
+        // kprintf("[PT_INIT] PDE %d -> PT @ 0x%08X (PT area)\n",
+        //        pdi, (uint32)page_table);
 
         pdbr[pdi].pd_pres  = 1;
         pdbr[pdi].pd_write = 1;
@@ -93,10 +88,6 @@ void page_table_init()
         uint32 vbase = pdi << 22;   
         uint32 pti;
         for (pti = 0; pti < PAGE_TABLE_ENTRIES; pti++) {
-
-            if (pti % 256 == 0)
-                kprintf("[PT_INIT]  PDE=%d PTE=%d mapping VA 0x%08X\n",
-                        pdi, pti, vbase + (pti<<12));
 
             uint32 vaddr = vbase + (pti << 12);
             uint32 phys = vaddr;
@@ -108,7 +99,7 @@ void page_table_init()
         }
     }
 
-    kprintf("[PT_INIT] Finished\n");
+    // kprintf("[PT_INIT] Finished\n");
 }
 
 void init_pt_used(void) {
@@ -173,76 +164,75 @@ void init_heap(struct procent* proc)
 
     freeblk->vaddr = (uint32)proc->heapstart;  // add vaddr field to memblk
 
-    kprintf("finished init heap\n");
+   // kprintf("finished init heap\n");
 
 }
 ///////////////////////////////////
 ///////////////////////////////////
 void reservespace(uint32 va_start, uint32 pages, pid32 pid)
 {
-    pd_t  *pdir;
+    pd_t  *pdir = (pd_t*)proctab[pid].pdbr;
     uint32 i;
-    uint32 va;
-    uint32 pd_index;
-    uint32 pt_index;
-    pd_t  *pagedirentry;
-    pt_t  *new_pt;
-    uint32 ii;
-    pt_t  *ptable;
-    pt_t  *pagetableentry;
-
-    pdir = (pd_t*)proctab[pid].pdbr;
+    uint32 j;
 
     for (i = 0; i < pages; i++) {
 
-        va        = va_start + (i * PAGE_SIZE);
-        pd_index  = (va >> 22) & 0x3FF;
-        pt_index  = (va >> 12) & 0x3FF;
+        uint32 va       = va_start + (i * PAGE_SIZE);
+        uint32 pd_index = (va >> 22) & 0x3FF;
+        uint32 pt_index = (va >> 12) & 0x3FF;
 
-        pagedirentry = &pdir[pd_index];
+        pd_t *pde = &pdir[pd_index];
 
-        /* allocate new user PT if PDE missing or kernel-only */
-// If PDE is not present OR if it's a KERNEL PDE (user=0), allocate new user PT
-if (pagedirentry->pd_pres == 0 || pagedirentry->pd_user == 0) {
+        /* ensure user heap PDE is always user-accessible */
+        if (pde->pd_user == 0)
+            pde->pd_user = 1;
 
-    // force replacement if kernel mapping
-    new_pt = (pt_t*)get_next_free_page();
-    if (new_pt == NULL)
-        return;
+        /* allocate PT if missing */
+        if (pde->pd_pres == 0)
+        {
+            pt_t *new_pt = (pt_t*)get_next_free_page();
+            if (new_pt == NULL)
+                return;
 
-    memset(new_pt, 0, PAGE_SIZE);
+            memset(new_pt, 0, PAGE_SIZE);
 
-    for (ii = 0; ii < 1024; ii++) {
-        new_pt[ii].pt_pres  = 0;
-        new_pt[ii].pt_avail = 1;
-        new_pt[ii].pt_write = 1;
-        new_pt[ii].pt_user  = 1;
-        new_pt[ii].pt_base  = 0;
+            for (j = 0; j < 1024; j++) {
+                new_pt[j].pt_pres  = 0;
+                new_pt[j].pt_avail = 0;
+                new_pt[j].pt_user  = 1;
+                new_pt[j].pt_write = 1;
+                new_pt[j].pt_base  = 0;
+            }
+
+            pde->pd_pres  = 1;
+            pde->pd_write = 1;
+            pde->pd_user  = 1;
+            pde->pd_base  = ((uint32)new_pt) >> 12;
+        }
+
+        pt_t *ptable = (pt_t*)(pde->pd_base << 12);
+        pt_t *pte    = &ptable[pt_index];
+
+        /* lazy-allocated vmalloc region */
+        pte->pt_pres  = 0;
+        pte->pt_avail = 1;
+        pte->pt_user  = 1;
+        pte->pt_write = 1;
+        pte->pt_base  = 0;
     }
-
-    pagedirentry->pd_pres  = 1;
-    pagedirentry->pd_write = 1;
-    pagedirentry->pd_user  = 1;
-    pagedirentry->pd_base  = ((uint32)new_pt) >> 12;
 }
 
-
-        ptable         = (pt_t*)(pagedirentry->pd_base << 12);
-        pagetableentry = &ptable[pt_index];
-
-        pagetableentry->pt_pres  = 0;
-        pagetableentry->pt_avail = 1;
-        pagetableentry->pt_write = 1;
-        pagetableentry->pt_user  = 1;
-        pagetableentry->pt_base  = 0;
-    }
-}
 
 void freeffsframe(uint32 frameaddr)
 {
     if (frameaddr < FFS_START || frameaddr >= FFS_END)
         return; 
+
     uint32 frameindex = (frameaddr - FFS_START) / PAGE_SIZE;
+
+    // kprintf("[DBG] FREE_FFS frame=%u phys=0x%08X\n",
+    //         frameindex, frameaddr);
+
     ffs_in_use[frameindex] = FALSE;
 }
 
@@ -317,7 +307,6 @@ char* vmalloc(uint32 nbytes)
     if (nbytes == 0)
         return NULL;
 
-    /* Round up to page size */
     if (nbytes % PAGE_SIZE != 0)
         nbytes = ((nbytes / PAGE_SIZE) + 1) * PAGE_SIZE;
 
@@ -325,7 +314,6 @@ char* vmalloc(uint32 nbytes)
     struct memblk* prev  = proc->heapmlist;
     struct memblk* curr  = prev->mnext;
 
-    /* Find a free block with enough room */
     while (curr != NULL) {
 
         if (curr->mlength >= nbytes) {
@@ -333,27 +321,30 @@ char* vmalloc(uint32 nbytes)
             uint32 va_start = curr->vaddr;
             uint32 pages    = nbytes / PAGE_SIZE;
 
-            /* Exact fit */
+            // kprintf("[VMALLOC] use block: vaddr=0x%08X len=%u pages=%u\n",
+            //        va_start, curr->mlength, pages);
+
             if (curr->mlength == nbytes) {
                 prev->mnext = curr->mnext;
             }
             else {
-                /* Split block */
                 struct memblk* newblk =
                     (struct memblk*) getmem(sizeof(struct memblk));
 
                 if (newblk == NULL)
                     return (char*)SYSERR;
 
-                newblk->vaddr   = curr->vaddr + nbytes;
-                newblk->mlength = curr->mlength - nbytes;
+                newblk->vaddr = curr->vaddr + nbytes;
+                newblk->mlength = (curr->vaddr + curr->mlength) - newblk->vaddr;
                 newblk->mnext   = curr->mnext;
 
                 prev->mnext   = newblk;
                 curr->mlength = nbytes;
+
+                // kprintf("[VMALLOC] new free block: vaddr=0x%08X len=%u\n",
+                //        newblk->vaddr, newblk->mlength);
             }
 
-            /* Mark reserved pages in the page tables */
             reservespace(va_start, pages, currpid);
             proc->allocvpages += pages;
 
@@ -364,7 +355,6 @@ char* vmalloc(uint32 nbytes)
         curr = curr->mnext;
     }
 
-    /* No space available */
     return (char*)SYSERR;
 }
 
@@ -372,114 +362,128 @@ char* vmalloc(uint32 nbytes)
 ///////////////////////////////////
 syscall vfree(char *ptr, uint32 bytes)
 {
-    struct procent *process = &proctab[currpid];
+    struct procent *proc = &proctab[currpid];
 
+    /* --- basic checks --- */
     if (ptr == NULL || bytes == 0)
         return SYSERR;
 
-    // round to page
+    /* round to page size */
     if (bytes % PAGE_SIZE != 0)
         bytes = ((bytes + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
 
-    uint32 virtual_start = (uint32)ptr;
-    uint32 virtual_end   = virtual_start + bytes;
+    uint32 vstart = (uint32)ptr;
+    uint32 vend   = vstart + bytes;
 
-    // check range and alignment
-    if (virtual_start < (uint32)process->heapstart || virtual_end > (uint32)process->heapend)
+    if (vstart < (uint32)proc->heapstart || vend > (uint32)proc->heapend)
         return SYSERR;
 
-    if (virtual_start % PAGE_SIZE != 0)
+    if (vstart % PAGE_SIZE != 0)
         return SYSERR;
 
     uint32 pages = bytes / PAGE_SIZE;
-    pd_t *pagedir = (pd_t *)process->pdbr;
+    pd_t  *pdir  = (pd_t *)proc->pdbr;
 
     uint32 i;
-    uint32 virtual_address;
-    virt_addr_t *virtaddr;
-    pd_t *pagedirentry;
-    pt_t *pagetable;
-    pt_t *pagetableentry;
+    uint32 vaddr;
+    virt_addr_t *va;
+    pd_t *pde;
+    pt_t *ptable;
+    pt_t *pte;
 
-    // unmap pages from page table
+    /* --- PASS 1: VALIDATE ALL PAGES --- */
     for (i = 0; i < pages; i++) {
-        virtual_address = virtual_start + i * PAGE_SIZE;
-        virtaddr = (virt_addr_t *)&virtual_address;
+        vaddr = vstart + i * PAGE_SIZE;
+        va = (virt_addr_t *)&vaddr;
 
-        pagedirentry = &pagedir[virtaddr->pd_offset];
-        if (pagedirentry->pd_pres == 0)
+        pde = &pdir[va->pd_offset];
+        if (pde->pd_pres == 0)
             return SYSERR;
 
-        pagetable = (pt_t *)(pagedirentry->pd_base << 12);
-        pagetableentry = &pagetable[virtaddr->pt_offset];
+        ptable = (pt_t *)(pde->pd_base << 12);
+        pte = &ptable[va->pt_offset];
 
-        // not mapped or reserved
-        if (pagetableentry->pt_pres == 0 && pagetableentry->pt_avail == 0)
+        /* not reserved and not present => invalid free */
+        if (pte->pt_pres == 0 && pte->pt_avail == 0)
             return SYSERR;
+    }
 
-        // free ffs frame if allocated
-        if (pagetableentry->pt_pres == 1) {
-            uint32 physical_frame_address = pagetableentry->pt_base << 12;
-            if (physical_frame_address >= FFS_START && physical_frame_address < FFS_END)
-                freeffsframe(physical_frame_address);
+    /* --- PASS 2: FREE PAGE TABLE ENTRIES --- */
+    for (i = 0; i < pages; i++) {
+        vaddr = vstart + i * PAGE_SIZE;
+        va = (virt_addr_t *)&vaddr;
+
+        pde = &pdir[va->pd_offset];
+        ptable = (pt_t *)(pde->pd_base << 12);
+        pte = &ptable[va->pt_offset];
+
+        if (pte->pt_pres == 1) {
+            uint32 phys = pte->pt_base << 12;
+            if (phys >= FFS_START && phys < FFS_END)
+                freeffsframe(phys);
         }
 
-        // correct lazy reset
-        pagetableentry->pt_pres  = 0;
-        pagetableentry->pt_avail = 1;
-        pagetableentry->pt_base  = 0;
+        pte->pt_pres  = 0;
+        pte->pt_avail = 0;
+        pte->pt_base  = 0;
     }
 
-    process->allocvpages -= pages;
+    proc->allocvpages -= pages;
 
-    // === free list handling (using vaddr, NOT struct addresses) ===
-    struct memblk *previousblock = process->heapmlist;
-    struct memblk *currentblock  = previousblock->mnext;
+    /* --- FREE LIST MERGE LOGIC --- */
 
-    while (currentblock != NULL && currentblock->vaddr < virtual_start) {
-        previousblock = currentblock;
-        currentblock  = currentblock->mnext;
+    struct memblk *prev = proc->heapmlist;
+    struct memblk *curr = prev->mnext;
+
+    /* find insertion position */
+    while (curr != NULL && curr->vaddr < vstart) {
+        prev = curr;
+        curr = curr->mnext;
     }
 
-    uint32 prev_end = (previousblock == process->heapmlist)
-                        ? 0
-                        : previousblock->vaddr + previousblock->mlength;
+    /* adjacency rules */
+    uint32 prev_end = (prev == proc->heapmlist)
+                        ? (uint32)proc->heapstart
+                        : prev->vaddr + prev->mlength;
 
-    uint32 curr_start = (currentblock == NULL)
-                        ? (uint32)process->heapend
-                        : currentblock->vaddr;
+    uint32 curr_start = (curr == NULL)
+                        ? (uint32)proc->heapend
+                        : curr->vaddr;
 
-    if (prev_end > virtual_start || virtual_end > curr_start)
+    /* must fit exactly between prev and curr */
+    if (prev_end > vstart || vend > curr_start)
         return SYSERR;
 
-    struct memblk *newblock = (struct memblk *)getmem(sizeof(struct memblk));
-    if (newblock == NULL)
+    /* allocate new free-block node */
+    struct memblk *blk = (struct memblk *)getmem(sizeof(struct memblk));
+    if (blk == NULL)
         return SYSERR;
 
-    newblock->vaddr   = virtual_start;
-    newblock->mlength = bytes;
-    newblock->mnext   = currentblock;
-    previousblock->mnext = newblock;
+    blk->vaddr   = vstart;
+    blk->mlength = bytes;
+    blk->mnext   = curr;
+    prev->mnext  = blk;
 
-    // coalesce with next
-    if (currentblock != NULL && virtual_end == curr_start) {
-        newblock->mlength += currentblock->mlength;
-        newblock->mnext = currentblock->mnext;
-        freemem((char*)currentblock, sizeof(struct memblk));
+    /* merge with next */
+    if (curr != NULL && vend == curr->vaddr) {
+        blk->mlength += curr->mlength;
+        blk->mnext    = curr->mnext;
+        freemem((char *)curr, sizeof(struct memblk));
     }
 
-    // coalesce with previous
-    if (previousblock != process->heapmlist) {
-        prev_end = previousblock->vaddr + previousblock->mlength;
-        if (prev_end == virtual_start) {
-            previousblock->mlength += newblock->mlength;
-            previousblock->mnext = newblock->mnext;
-            freemem((char*)newblock, sizeof(struct memblk));
+    /* merge with previous */
+    if (prev != proc->heapmlist) {
+        prev_end = prev->vaddr + prev->mlength;
+        if (prev_end == blk->vaddr) {
+            prev->mlength += blk->mlength;
+            prev->mnext = blk->mnext;
+            freemem((char *)blk, sizeof(struct memblk));
         }
     }
 
     return OK;
 }
+
 
 ///////////////////////////////////
 ///////////////////////////////////
@@ -529,11 +533,16 @@ uint32 new_ffs_frame(){
     for (frame = 0; frame < MAX_FFS_SIZE; frame++){
         if (ffs_in_use[frame] == FALSE){
             ffs_in_use[frame] = TRUE;
+
+            // kprintf("[DBG] ALLOC_FFS frame=%u phys=0x%08X\n",
+            //         frame, (frame * PAGE_SIZE) + FFS_START);
+
             return (frame * PAGE_SIZE) + FFS_START;
         }
     }
     return SYSERR;
 }
+
 ///////////////////////////////////
 ///////////////////////////////////
 void dump_pd() {
@@ -581,6 +590,47 @@ void dump_pt(void)
         }
     }
 }
+
+void free_process_pages(pid32 pid)
+{
+    struct procent *pr = &proctab[pid];
+    pd_t *pd = (pd_t *)pr->pdbr;
+
+    int pdi, pti;
+
+    for (pdi = 0; pdi < 1024; pdi++) {
+
+        pd_t *pde = &pd[pdi];
+        if (pde->pd_pres == 0)
+            continue;
+
+        /* Skip kernel mappings (PD entries we copied from kernel) */
+        uint32 va_start = pdi << 22;
+        if (va_start < USER_HEAP_START || va_start >= USER_HEAP_END)
+            continue;
+
+        /* Process-owned page table */
+        pt_t *pt = (pt_t *)(pde->pd_base << 12);
+
+        for (pti = 0; pti < 1024; pti++) {
+            pt_t *pte = &pt[pti];
+
+            if (pte->pt_pres == 1) {
+                uint32 phys = pte->pt_base << 12;
+                if (phys >= FFS_START && phys < FFS_END) {
+                    freeffsframe(phys);
+                }
+            }
+        }
+
+        /* free PT frame */
+        free_page_frame(pde->pd_base << 12);
+    }
+
+    /* free PD frame */
+    free_page_frame(pr->pdbr);
+}
+
 
 // 0x02000000  ------------------------+
 //                                     |

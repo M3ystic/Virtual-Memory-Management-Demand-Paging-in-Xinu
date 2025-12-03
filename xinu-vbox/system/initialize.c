@@ -232,8 +232,8 @@ static	void	sysinit()
 	proctab[NULLPROC].pdbr = kernels_directory;
 	set_evec(14, (uint32)pagefault_handler_disp);
 	write_cr3(kernels_directory);
-	dump_pd();
-	dump_pt();
+	// dump_pd();
+	// dump_pt();
 	enable_paging();
 
 	return;

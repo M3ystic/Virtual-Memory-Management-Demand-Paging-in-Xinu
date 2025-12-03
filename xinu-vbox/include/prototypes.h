@@ -14,7 +14,8 @@ extern void reservespace(uint32, uint32, pid32);
 extern void freeffsframe(uint32);
 extern void free_page_frame(uint32);
 extern uint32 new_ffs_frame(void);
-void init_pt_used(void);
+extern void init_pt_used(void);
+extern void free_process_pages(pid32);
 
 /* in file pagefault_handler_disp.S */
 extern void pagefault_handler_disp(void);
